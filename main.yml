@@ -118,10 +118,7 @@
         sudo -u postgres psql -c "CREATE DATABASE hng_db;"
         sudo -u postgres psql -c "CREATE USER admin WITH ENCRYPTED PASSWORD 'yourpassword';"
         sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE hng_db TO admin;"
-
-    # Messaging queue setup (optional)
-    # ... (refer to previous example)
-    # Consider adding messaging queue setup tasks if your boilerplate requires it.  
+  
 
     # Nginx setup
     - name: Set up Nginx
