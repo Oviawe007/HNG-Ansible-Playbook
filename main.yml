@@ -45,9 +45,14 @@
         group: hng
         recurse: yes
 
+    - name: Initialize git repository
+      command: git init
+      args:
+        chdir: /opt/stage_5b
 
     - name: Clean repository if exists
       become: true
+      become_user: hng
       command: sudo -u hng git reset --hard HEAD
       args:
         chdir: /opt/stage_5b
@@ -55,6 +60,7 @@
 
     - name: Fetch latest changes from remote
       become: true
+      become_user: hng
       command: sudo -u hng git fetch https://github.com/hngprojects/hng_boilerplate_expressjs.git devops
       args:
         chdir: /opt/stage_5b
@@ -66,12 +72,14 @@
         name: ["npm", "nodejs"]
         state: present
         update_cache: yes
+      ignore_errors: yes
 
 
     # Install application dependencies
     - name: Install npm dependencies
       community.general.npm:
         path: /opt/stage_5b
+      ignore_errors: yes
 
     # PostgreSQL setup
     - name: Install PostgreSQL
