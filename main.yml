@@ -1,0 +1,189 @@
+- name: Deploy hng_boilerplate_expressjs Application
+  hosts: hng
+  become: yes
+
+  tasks:
+    - name: Update package lists
+      apt:
+        update_cache: yes
+        cache_valid_time: 86400  
+
+    - name: Upgrade packages
+      apt:
+        upgrade: yes
+        update_cache: no
+
+
+    # User and Directory setup
+    - name: Create hng user
+      user:
+        name: hng
+        state: present
+        groups: sudo
+        append: yes
+        home: /home/hng
+        shell: /bin/bash
+        createhome: yes
+
+    - name: Create /opt/stage_5b directory
+      file:
+        path: /opt/stage_5b
+        state: directory
+        owner: hng
+        group: hng
+        mode: '0755'
+
+    - name: Add /opt/stage_5b to Git safe directories
+      become: false
+      become_user: hng
+      command: git config --global --add safe.directory /opt/stage_5b
+
+    - name: Ensure the correct ownership of the directory before git operations
+      file:
+        path: /opt/stage_5b
+        owner: hng
+        group: hng
+        recurse: yes
+
+
+    - name: Clean repository if exists
+      become: true
+      command: sudo -u hng git reset --hard HEAD
+      args:
+        chdir: /opt/stage_5b
+      ignore_errors: yes
+
+    - name: Fetch latest changes from remote
+      become: true
+      command: sudo -u hng git fetch https://github.com/hngprojects/hng_boilerplate_expressjs.git devops
+      args:
+        chdir: /opt/stage_5b
+
+
+    # Install dependencies
+    - name: Install Node.js and npm
+      apt:
+        name: ["npm", "nodejs"]
+        state: present
+        update_cache: yes
+
+
+    # Install application dependencies
+    - name: Install npm dependencies
+      community.general.npm:
+        path: /opt/stage_5b
+
+    # PostgreSQL setup
+    - name: Install PostgreSQL
+      apt:
+        name: postgresql
+        state: present
+        update_cache: yes
+    
+    - name: Ensure PostgreSQL service is running
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+    
+    - name: Create /var/secrets directory
+      file:
+        path: /var/secrets
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+
+    - name: Save PostgreSQL credentials to /var/secrets/pg_pw.txt
+      copy:
+        content: |
+          POSTGRES_USER=admin
+          POSTGRES_PASSWORD=yourpassword
+        dest: /var/secrets/pg_pw.txt
+        owner: postgres
+        group: postgres
+        mode: '0600'
+
+    - name: Set up PostgreSQL database
+      become: false
+      shell: |
+        sudo -u postgres psql -c "CREATE DATABASE hng_db;"
+        sudo -u postgres psql -c "CREATE USER admin WITH ENCRYPTED PASSWORD 'yourpassword';"
+        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE hng_db TO admin;"
+
+    # Messaging queue setup (optional)
+    # ... (refer to previous example)
+    # Consider adding messaging queue setup tasks if your boilerplate requires it.  
+
+    # Nginx setup
+    - name: Set up Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Configure Nginx as a reverse proxy
+      template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/sites-available/stage_5b
+      notify:
+        - Restart nginx
+
+    - name: Enable Nginx site
+      command: ln -s /etc/nginx/sites-available/stage_5b /etc/nginx/sites-enabled/
+      args:
+        removes: /etc/nginx/sites-enabled/stage_5b
+      notify:
+        - Restart Nginx
+
+    - name: Create log directories
+      file:
+        path: /var/log/stage_5b
+        state: directory
+        owner: hng
+        group: hng
+        mode: '0755'
+
+    - name: Create log files
+      file:
+        path: /var/log/stage_5b/{error,out}.log
+        state: touch
+        owner: hng
+        group: hng
+        mode: '0644'
+
+    # Messaging Queue setup (RabbitMQ)
+    - name: Install RabbitMQ
+      apt:
+        name: rabbitmq-server
+        state: present
+        update_cache: yes
+
+    - name: Enable and start RabbitMQ service
+      systemd:
+        name: rabbitmq-server
+        enabled: yes
+        state: started
+
+    - name: Add RabbitMQ user
+      rabbitmq_user:
+        user: joe
+        password: changeme
+        vhost: /
+        configure_priv: .*
+        read_priv: .*
+        write_priv: .*
+        state: present
+
+  # Application setup
+    - name: Build and start application
+      script:
+        chdir: /opt/stage_5b
+        cmds:
+          - npm build
+          - npm start    
+
+  handlers:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted
