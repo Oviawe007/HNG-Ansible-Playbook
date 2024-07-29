@@ -184,7 +184,7 @@
       script:
         chdir: /opt/stage_5b
         cmds:
-          - npm build
+          - npm run build
           - npm start    
 
   handlers:
